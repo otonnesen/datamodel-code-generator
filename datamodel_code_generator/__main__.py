@@ -122,7 +122,11 @@ class Config(BaseModel):
                 return cls.__fields__
 
     @field_validator(
-        'aliases', 'extra_template_data', 'custom_formatters_kwargs', mode='before'
+        'aliases',
+        'type_overrides',
+        'extra_template_data',
+        'custom_formatters_kwargs',
+        mode='before',
     )
     def validate_file(cls, value: Any) -> Optional[TextIOBase]:
         if value is None or isinstance(value, TextIOBase):
@@ -260,6 +264,7 @@ class Config(BaseModel):
     snake_case_field: bool = False
     strip_default_none: bool = False
     aliases: Optional[TextIOBase] = None
+    type_overrides: Optional[TextIOBase] = None
     disable_timestamp: bool = False
     enable_version_header: bool = False
     allow_population_by_field_name: bool = False
@@ -422,6 +427,24 @@ def main(args: Optional[Sequence[str]] = None) -> Exit:
             )
             return Exit.ERROR
 
+    if config.type_overrides is None:
+        type_overrides = None
+    else:
+        with config.type_overrides as data:
+            try:
+                type_overrides = json.load(data)
+            except json.JSONDecodeError as e:
+                print(f'Unable to load type override mapping: {e}', file=sys.stderr)
+                return Exit.ERROR
+        if not isinstance(type_overrides, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in type_overrides.items()
+        ):
+            print(
+                'Type override mapping must be a JSON string mapping (e.g. {"from": "to", ...})',
+                file=sys.stderr,
+            )
+            return Exit.ERROR
+
     if config.custom_formatters_kwargs is None:
         custom_formatters_kwargs = None
     else:
@@ -460,6 +483,7 @@ def main(args: Optional[Sequence[str]] = None) -> Exit:
             strip_default_none=config.strip_default_none,
             extra_template_data=extra_template_data,
             aliases=aliases,
+            type_overrides=type_overrides,
             disable_timestamp=config.disable_timestamp,
             enable_version_header=config.enable_version_header,
             allow_population_by_field_name=config.allow_population_by_field_name,

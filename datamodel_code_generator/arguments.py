@@ -429,6 +429,11 @@ base_options.add_argument(
     type=str,
     default=None,
 )
+base_options.add_argument(
+    '--type-overrides',
+    help='A file with type overrides.',
+    type=FileType('rt'),
+)
 template_options.add_argument(
     '--custom-formatters-kwargs',
     help='A file with kwargs for custom formatters.',

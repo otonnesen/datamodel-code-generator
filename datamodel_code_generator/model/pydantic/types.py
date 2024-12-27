@@ -159,6 +159,7 @@ class DataTypeManager(_DataTypeManager):
         use_standard_collections: bool = False,
         use_generic_container_types: bool = False,
         strict_types: Optional[Sequence[StrictTypes]] = None,
+        type_overrides: Optional[Dict[str, str]] = None,
         use_non_positive_negative_number_constrained_types: bool = False,
         use_union_operator: bool = False,
         use_pendulum: bool = False,
@@ -338,5 +339,7 @@ class DataTypeManager(_DataTypeManager):
         elif types == Types.boolean:
             if StrictTypes.bool in self.strict_types:
                 return self.strict_type_map[StrictTypes.bool]
+        elif types == Types.overridden:
+            return self.get_overridden_type(**kwargs)
 
         return self.type_map[types]

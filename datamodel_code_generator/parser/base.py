@@ -350,6 +350,7 @@ class Parser(ABC):
         snake_case_field: bool = False,
         strip_default_none: bool = False,
         aliases: Optional[Mapping[str, str]] = None,
+        type_overrides: Optional[Dict[str, str]] = None,
         allow_population_by_field_name: bool = False,
         apply_default_values_for_required_fields: bool = False,
         allow_extra_fields: bool = False,
@@ -529,6 +530,11 @@ class Parser(ABC):
         self.custom_formatters_kwargs = custom_formatters_kwargs
         self.treat_dots_as_module = treat_dots_as_module
         self.default_field_extras: Optional[Dict[str, Any]] = default_field_extras
+        self.type_overrides = (
+            {k: Import.from_full_path(v) for k, v in type_overrides.items()}
+            if type_overrides is not None
+            else None
+        )
 
     @property
     def iter_source(self) -> Iterator[Source]:
@@ -1211,6 +1217,42 @@ class Parser(ABC):
                 if model_field.nullable is not True:  # pragma: no cover
                     model_field.nullable = False
 
+    def __remove_overridden_models(
+        self,
+        models: List[DataModel],
+    ) -> None:
+        if self.type_overrides is None:
+            return
+
+        ixs_to_remove = []
+        for ix, model in enumerate(models[:]):
+            if model.name in self.type_overrides.keys():
+                ixs_to_remove.append(ix)
+
+        for ix in reversed(ixs_to_remove):
+            models.pop(ix)
+
+    def __apply_type_overrides(
+        self,
+        models: List[DataModel],
+    ) -> None:
+        if self.type_overrides is None:
+            return
+        for model in models:
+            for field in model.fields:
+                if field.data_type.reference is None:
+                    continue
+
+                if (
+                    field.data_type.reference.original_name
+                    in self.type_overrides.keys()
+                ):
+                    field.data_type.import_ = self.type_overrides[
+                        field.data_type.reference.original_name
+                    ]
+                    field.data_type.reference = None
+                    field.data_type.alias = field.data_type.import_.import_
+
     @classmethod
     def __postprocess_result_modules(cls, results):
         def process(input_tuple) -> Tuple[str, ...]:
@@ -1373,6 +1415,8 @@ class Parser(ABC):
             self.__sort_models(models, imports)
             self.__apply_discriminator_type(models, imports)
             self.__set_one_literal_on_default(models)
+            self.__remove_overridden_models(models)
+            self.__apply_type_overrides(models)
 
             processed_models.append(
                 Processed(module, models, init, imports, scoped_model_resolver)
